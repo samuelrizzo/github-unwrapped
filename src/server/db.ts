@@ -20,6 +20,9 @@ type InstagramStoryCollection = {
 
 const mongoUrl = () => {
   const { DB_NAME, DB_PASSWORD, DB_HOST, DB_USER } = backendCredentials();
+  if (!DB_USER || !DB_PASSWORD) {
+    return `mongodb://${DB_HOST}/${DB_NAME}`;
+  }
   return `mongodb+srv://${DB_USER}:${DB_PASSWORD}@${DB_HOST}/${DB_NAME}?retryWrites=true&w=majority`;
 };
 

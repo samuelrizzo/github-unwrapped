@@ -58,13 +58,15 @@ export const content: Array<AboutItemContent> = [
           To reset your statistics if you logged in with GitHub, click the
           button below.
         </p>
-        <a
-          className={styles.aboutButton}
-          style={{ lineHeight: "43px" }}
-          href={signInWithGitHubLink(true)}
-        >
-          Login again
-        </a>
+        {signInWithGitHubLink(true) ? (
+          <a
+            className={styles.aboutButton}
+            style={{ lineHeight: "43px" }}
+            href={signInWithGitHubLink(true)!}
+          >
+            Login again
+          </a>
+        ) : null}
         <p>
           If you just entered your username, visit
           githubunwrapped.com/YourUsername?reset=true to reset your statistics

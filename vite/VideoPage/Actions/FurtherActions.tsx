@@ -10,6 +10,9 @@ export const FurtherActions: React.FC = () => {
     return;
   }
 
+  const oauthLink = signInWithGitHubLink();
+  const showPrivateMetrics = !window.__USER__!.loggedInWithGitHub && oauthLink;
+
   return (
     <div className={styles.furtherActionsWrapper}>
       <div className={styles.furtherActionsButtonContainer}>
@@ -19,8 +22,8 @@ export const FurtherActions: React.FC = () => {
             label="Unwrap another user"
           />
         </Link>
-        {window.__USER__!.loggedInWithGitHub ? null : (
-          <a href={signInWithGitHubLink()}>
+        {showPrivateMetrics ? (
+          <a href={oauthLink}>
             <FurtherAction
               icon={(params) => (
                 <PrivateContributionsIcon {...params} width={18} />
@@ -28,7 +31,7 @@ export const FurtherActions: React.FC = () => {
               label="Unlock private metrics"
             />
           </a>
-        )}
+        ) : null}
       </div>
     </div>
   );

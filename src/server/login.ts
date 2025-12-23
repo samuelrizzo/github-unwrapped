@@ -18,6 +18,12 @@ export const loginEndPoint = async (request: Request, response: Response) => {
     return response.end();
   }
 
+  // Check if OAuth is configured
+  const { CLIENT_SECRET, VITE_CLIENT_ID } = backendCredentials();
+  if (!VITE_CLIENT_ID || !CLIENT_SECRET) {
+    return response.redirect("/?error=oauth_not_configured");
+  }
+
   const query = z
     .object({
       code: z.string(),
@@ -38,8 +44,6 @@ export const loginEndPoint = async (request: Request, response: Response) => {
 
     throw new Error(query.error_description);
   }
-
-  const { CLIENT_SECRET, VITE_CLIENT_ID } = backendCredentials();
 
   const formdata = new FormData();
   formdata.append("client_id", VITE_CLIENT_ID);

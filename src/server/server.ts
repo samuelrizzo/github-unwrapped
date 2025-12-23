@@ -3,6 +3,7 @@ import react from "@vitejs/plugin-react-swc";
 import bodyParser from "body-parser";
 import type { Express, NextFunction, Request, Response } from "express";
 import express from "express";
+import path from "path";
 import serveStatic from "serve-static";
 import { createServer } from "vite";
 import { REDIRECT_URL_ENDPOINT } from "../helpers/redirect-url.js";
@@ -71,6 +72,10 @@ export const startServer = async () => {
   const app = express();
 
   app.use(bodyParser.json());
+
+  // Serve output files (locally rendered videos and images)
+  const outputDir = path.join(process.cwd(), "public", "output");
+  app.use("/output", serveStatic(outputDir));
 
   app.post("/api/render", apiEndpointWrapper(renderEndPoint));
 

@@ -4,6 +4,12 @@ import { nodeEnv } from "./index-html.js";
 export const sendDiscordMessage = async (message: string) => {
   const channel = backendCredentials().DISCORD_CHANNEL;
   const token = backendCredentials().DISCORD_TOKEN;
+
+  if (!channel || !token || channel === "0" || token === "dummy") {
+    console.log("[Discord disabled]", message);
+    return;
+  }
+
   if (nodeEnv === "development") {
     console.log(message);
   } else {

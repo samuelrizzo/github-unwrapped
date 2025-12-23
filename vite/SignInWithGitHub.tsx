@@ -2,11 +2,18 @@ import buttonStyles from "./Button/styles.module.css";
 import { signInWithGitHubLink } from "./sign-in-with-github";
 
 export const SignInWithGitHub: React.FC = () => {
+  const link = signInWithGitHubLink(true);
+
+  // Don't render if OAuth is not configured
+  if (!link) {
+    return null;
+  }
+
   return (
     <a
       style={{ textDecoration: "none" }}
       className={buttonStyles.loginwithgithub}
-      href={signInWithGitHubLink(true)}
+      href={link}
     >
       <svg
         xmlns="http://www.w3.org/2000/svg"

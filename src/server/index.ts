@@ -4,20 +4,24 @@ import { ensureIndices } from "./db.js";
 import { nodeEnv } from "./index-html.js";
 import { startServer } from "./server.js";
 
-Sentry.init({
-  dsn: backendCredentials().SENTRY_DSN,
-  environment: nodeEnv,
-  maxBreadcrumbs: 50,
-  // We recommend adjusting this value in production, or using tracesSampler
-  // for finer control
-  tracesSampleRate: 1.0,
+const sentryDsn = backendCredentials().SENTRY_DSN;
 
-  integrations: [
-    new Sentry.Integrations.LocalVariables({
-      captureAllExceptions: true,
-    }),
-  ],
-});
+if (sentryDsn && !sentryDsn.includes("dummy") && !sentryDsn.includes("x@x")) {
+  Sentry.init({
+    dsn: sentryDsn,
+    environment: nodeEnv,
+    maxBreadcrumbs: 50,
+    tracesSampleRate: 1.0,
+    integrations: [
+      new Sentry.Integrations.LocalVariables({
+        captureAllExceptions: true,
+      }),
+    ],
+  });
+  console.log("Sentry initialized");
+} else {
+  console.log("Sentry disabled (no valid DSN)");
+}
 
 await ensureIndices();
 await startServer();

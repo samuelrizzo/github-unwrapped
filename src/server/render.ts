@@ -1,24 +1,15 @@
-import type { AwsRegion } from "@remotion/lambda";
-import { getRegions } from "@remotion/lambda";
-import {
-  getRenderProgress,
-  renderMediaOnLambda,
-  speculateFunctionName,
-} from "@remotion/lambda/client";
+import { bundle } from "@remotion/bundler";
+import { renderMedia, selectComposition } from "@remotion/renderer";
 import type { Request, Response } from "express";
+import { existsSync, mkdirSync } from "fs";
 import { ObjectId } from "mongodb";
+import path from "path";
 import type { z } from "zod";
 import type { RenderResponse, compositionSchema } from "../config.js";
 import {
-  DISK,
-  RAM,
   RenderRequest,
-  SITE_NAME,
-  TIMEOUT,
   computeCompositionParameters,
 } from "../config.js";
-import { getRandomAwsAccount } from "../helpers/get-random-aws-account.js";
-import { setEnvForKey } from "../helpers/set-env-for-key.js";
 import type { Render } from "./db.js";
 import {
   findRender,
@@ -27,15 +18,32 @@ import {
   updateRender,
 } from "./db.js";
 import { makeOrGetIgStory, makeOrGetOgImage } from "./make-og-image.js";
-import { getFinality } from "./progress.js";
 import {
   addRenderInProgress,
   getRenderInProgress,
   removeRenderInProgress,
 } from "./render-pool.js";
 
-export const getRandomRegion = (): AwsRegion => {
-  return getRegions()[Math.floor(Math.random() * getRegions().length)];
+const OUTPUT_DIR = path.join(process.cwd(), "public", "output");
+
+// Ensure output directory exists
+if (!existsSync(OUTPUT_DIR)) {
+  mkdirSync(OUTPUT_DIR, { recursive: true });
+}
+
+// Bundle cache to avoid re-bundling on each render
+let bundledPromise: Promise<string> | null = null;
+
+const getBundled = async () => {
+  if (!bundledPromise) {
+    bundledPromise = bundle({
+      entryPoint: path.join(process.cwd(), "remotion", "index.ts"),
+      onProgress: (progress) => {
+        console.log(`Bundling: ${Math.round(progress * 100)}%`);
+      },
+    });
+  }
+  return bundledPromise;
 };
 
 export const renderOrGetProgress = async (
@@ -46,8 +54,8 @@ export const renderOrGetProgress = async (
     username: username.toLowerCase(),
     theme,
   });
-  addRenderInProgress({ theme, username: username.toLowerCase() });
 
+  // Check if a completed render already exists
   const existingRender = await findRender({
     username,
     theme,
@@ -67,65 +75,24 @@ export const renderOrGetProgress = async (
         error: existingRender.finality.errors,
       };
     }
-
-    setEnvForKey(existingRender.account);
-    const progress = await getRenderProgress({
-      bucketName: existingRender.bucketName,
-      functionName: existingRender.functionName,
-      region: existingRender.region,
-      renderId: existingRender.renderId,
-    });
-
-    if (progress.fatalErrorEncountered) {
-      await updateRender({
-        ...existingRender,
-        finality: getFinality(progress),
-      });
-
-      return {
-        type: "render-error",
-        error: progress.errors[0].stack,
-      };
-    }
-
-    if (progress.done && progress.outputFile) {
-      await updateRender({
-        ...existingRender,
-        finality: getFinality(progress),
-      });
-
-      return {
-        type: "video-available",
-        url: progress.outputFile,
-      };
-    }
-
-    return {
-      type: "render-running",
-      progress: progress.overallProgress,
-    };
   }
 
+  // If already rendering, return progress
   if (exists) {
     return {
       type: "render-running",
-      progress: 1,
+      progress: 0.5, // Estimated progress
     };
   }
 
-  const account = getRandomAwsAccount();
-  const region = getRandomRegion();
-
-  const functionName = speculateFunctionName({
-    diskSizeInMb: DISK,
-    memorySizeInMb: RAM,
-    timeoutInSeconds: TIMEOUT,
-  });
+  // Mark as in progress
+  addRenderInProgress({ theme, username: username.toLowerCase() });
 
   const _id = new ObjectId();
 
   const userStat = await getProfileStatsFromCache(username);
   if (userStat === "not-found") {
+    removeRenderInProgress({ username: username.toLowerCase(), theme });
     return {
       type: "render-error",
       error: "User not found",
@@ -133,6 +100,7 @@ export const renderOrGetProgress = async (
   }
 
   if (userStat === null) {
+    removeRenderInProgress({ username: username.toLowerCase(), theme });
     return {
       type: "render-error",
       error: "User not fetched",
@@ -142,44 +110,98 @@ export const renderOrGetProgress = async (
   const inputProps: z.infer<typeof compositionSchema> =
     computeCompositionParameters(userStat, theme);
 
-  setEnvForKey(account);
-  const [{ renderId, bucketName }] = await Promise.all([
-    renderMediaOnLambda({
-      codec: "h264",
-      functionName,
-      region,
-      serveUrl: SITE_NAME,
-      composition: "Main",
-      inputProps,
-      downloadBehavior: {
-        type: "download",
-        fileName: `unwrapped-${username}.mp4`,
-      },
-      deleteAfter: "30-days",
-    }),
+  // Start background render
+  renderVideoLocally(username, theme, inputProps, _id).catch((err) => {
+    console.error("Render error:", err);
+  });
+
+  // Generate OG/IG images in parallel
+  Promise.all([
     makeOrGetOgImage(userStat),
     makeOrGetIgStory(userStat),
-  ]);
-
-  const newRender: Render = {
-    region,
-    bucketName,
-    renderId,
-    username: username.toLowerCase(),
-    functionName,
-    theme,
-    account,
-    finality: null,
-  };
-
-  await saveRender(newRender, _id);
-  removeRenderInProgress({ username: username.toLowerCase(), theme });
+  ]).catch((err) => {
+    console.error("Image generation error:", err);
+  });
 
   return {
     type: "render-running",
     progress: 0,
   };
 };
+
+async function renderVideoLocally(
+  username: string,
+  theme: string,
+  inputProps: z.infer<typeof compositionSchema>,
+  _id: ObjectId,
+) {
+  const outputFileName = `unwrapped-${username.toLowerCase()}-${theme}.mp4`;
+  const outputPath = path.join(OUTPUT_DIR, outputFileName);
+  const outputUrl = `/output/${outputFileName}`;
+
+  // Create initial database record
+  const newRender: Render = {
+    region: "local" as any,
+    bucketName: "local",
+    renderId: _id.toString(),
+    username: username.toLowerCase(),
+    functionName: "local",
+    theme: theme as any,
+    account: 0,
+    finality: null,
+  };
+
+  await saveRender(newRender, _id);
+
+  try {
+    console.log(`Starting local render for ${username}...`);
+
+    const bundled = await getBundled();
+
+    const composition = await selectComposition({
+      serveUrl: bundled,
+      id: "Main",
+      inputProps,
+    });
+
+    await renderMedia({
+      composition,
+      serveUrl: bundled,
+      codec: "h264",
+      outputLocation: outputPath,
+      inputProps,
+      onProgress: ({ progress }) => {
+        console.log(`Rendering ${username}: ${Math.round(progress * 100)}%`);
+      },
+    });
+
+    console.log(`Render complete for ${username}: ${outputPath}`);
+
+    // Update render with success
+    await updateRender({
+      ...newRender,
+      finality: {
+        type: "success",
+        url: outputUrl,
+        outputSize: 0,
+        reportedCost: 0,
+      },
+    });
+  } catch (error) {
+    console.error(`Render failed for ${username}:`, error);
+
+    // Update render with error
+    await updateRender({
+      ...newRender,
+      finality: {
+        type: "error",
+        errors: (error as Error).message,
+      },
+    });
+  } finally {
+    removeRenderInProgress({ username: username.toLowerCase(), theme: theme as any });
+  }
+}
 
 export const renderEndPoint = async (request: Request, response: Response) => {
   if (request.method === "OPTIONS") {

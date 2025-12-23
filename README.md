@@ -1,23 +1,73 @@
 <img width="1200" alt="readme" src="https://github.com/remotion-dev/github-unwrapped-2023/assets/73991323/0a907f4f-a591-4d98-8b38-c90581ccfb33">
 
-**Try it out live:** [GitHubUnwrapped.com](https://www.githubunwrapped.com)
+**Original project:** [GitHubUnwrapped.com](https://www.githubunwrapped.com)
 
-A platform that generates a year-in-review video for each GitHub user. Built with Vite 5, Remotion and AWS Lambda.
+A platform that generates a year-in-review video for each GitHub user.
 
-## Make your own
+## Local Fork
 
-Want to make your own year-in-review for your users?
+This fork runs **100% locally** using Docker, without requiring AWS Lambda. Videos are rendered on your machine using the Remotion renderer.
 
-Feel free to fork and use this repository as a template! Note the legal disclaimers at the bottom of this README.
+### Requirements
 
-## Versions
+- Docker and Docker Compose
+- GitHub Personal Access Token
+
+### Quick Start
+
+1. **Create a GitHub Token**
+
+   Go to https://github.com/settings/tokens → "Generate new token (classic)"
+
+   Scopes needed: `read:user`
+
+2. **Create `.env` file**
+
+   Copy `.env.local.example` to `.env` and add your token:
+
+   ```env
+   GITHUB_TOKEN_1=ghp_your_token_here
+   ```
+
+3. **Start the application**
+
+   ```bash
+   docker-compose up --build
+   ```
+
+4. **Open in browser**
+
+   http://localhost:8080
+
+### Stop the application
+
+```bash
+docker-compose down
+```
+
+### Notes
+
+- Video rendering takes ~2-5 minutes per video (local CPU)
+- OAuth login is optional. Without it, you can generate videos for any public GitHub user by entering their username
+- To enable OAuth login, add `VITE_CLIENT_ID` and `CLIENT_SECRET` to your `.env` file
+
+---
+
+## Original Setup (AWS Lambda)
+
+<details>
+<summary>Click to expand original setup instructions</summary>
+
+Built with Vite 5, Remotion and AWS Lambda.
+
+### Versions
 
 - 2024: `main` branch
 - 2023: `2023` branch
 - 2022: [`github-unwrapped-2022` Repo](https://github.com/remotion-dev/github-unwrapped-2022)
 - 2021: [`github-unwrapped-2021` Repo](https://github.com/remotion-dev/github-unwrapped-2021)
 
-## Setup
+### Setup
 
 1. Run `npm i` to install dependencies.
 2. Rename `.env.example` to `.env`
@@ -53,6 +103,8 @@ npm run remotion
 ```
 
 To deploy, connect your repository to [Render](https://render.com/). Don't forget to also set the environment variables there too.
+
+</details>
 
 ## Scaling strategy
 

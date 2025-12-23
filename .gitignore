@@ -45,3 +45,6 @@ dist
 .sentryclirc
 
 build
+
+# Local render output
+public/output/

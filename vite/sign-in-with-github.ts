@@ -1,6 +1,11 @@
-import { frontendCredentials, makeRedirectUriFrontend } from "./env";
+import { frontendCredentials, isOAuthConfigured, makeRedirectUriFrontend } from "./env";
 
-export const signInWithGitHubLink = (reset = false) => {
+export const signInWithGitHubLink = (reset = false): string | null => {
+  // Return null if OAuth is not configured
+  if (!isOAuthConfigured()) {
+    return null;
+  }
+
   const params = new URLSearchParams();
   params.append("redirect_uri", makeRedirectUriFrontend(reset));
   params.append("client_id", frontendCredentials().VITE_CLIENT_ID);
